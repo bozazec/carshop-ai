@@ -1,7 +1,10 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 
 const AppBar: React.FC = () => {
+  const { user, signOut } = useAuth();
+
   const navItems = [
     { path: '/', label: 'Dashboard' },
     { path: '/clients', label: 'Clients' },
@@ -20,28 +23,42 @@ const AppBar: React.FC = () => {
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
             <span className="text-white font-semibold text-xl mr-4">Car Shop</span>
+            {user && (
+              <div className="hidden md:block">
+                <div className="ml-10 flex items-baseline space-x-4">
+                  {navItems.map((item) => (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      className={({ isActive }) =>
+                        `px-3 py-2 rounded-md text-sm font-medium ${
+                          isActive ? activeClassName : inactiveClassName
+                        }`
+                      }
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {user && (
             <div className="hidden md:block">
-              <div className="ml-10 flex items-baseline space-x-4">
-                {navItems.map((item) => (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    className={({ isActive }) =>
-                      `px-3 py-2 rounded-md text-sm font-medium ${
-                        isActive ? activeClassName : inactiveClassName
-                      }`
-                    }
-                  >
-                    {item.label}
-                  </NavLink>
-                ))}
+              <div className="ml-4 flex items-center md:ml-6">
+                <span className="text-gray-400 mr-4 text-sm">{user.email}</span>
+                <button
+                  onClick={signOut}
+                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Logout
+                </button>
               </div>
             </div>
-          </div>
-          {/* TODO: Add User Profile/Logout Button */}
+          )}
         </div>
       </div>
-      {/* TODO: Add Mobile Menu */}
     </nav>
   );
 };
