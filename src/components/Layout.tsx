@@ -6,7 +6,7 @@ const Layout: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col bg-gray-100">
       <AppBar />
-      <main className="flex-grow container mx-auto p-4">
+      <main className="flex-grow container mx-auto p-4 pt-24">
         <Outlet />
       </main>
       {/* Footer could go here */}
