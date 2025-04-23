@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
-import VehicleForm from '../components/VehicleForm'; // Import the form
-import Modal from '../components/Modal'; // Import the modal
+import VehicleForm from '../components/VehicleForm';
+import Modal from '../components/Modal';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 // Define the structure based on your Supabase 'vehicles' table
 // Include related client data if fetching it (e.g., using a join)
@@ -24,65 +25,64 @@ export interface Vehicle {
   // client_name?: string | null; 
 }
 
+// Define the async function to fetch vehicles (can be outside the component)
+const fetchVehiclesFromSupabase = async (): Promise<Vehicle[]> => {
+  const { data, error } = await supabase
+    .from('vehicles')
+    .select('*' // Select specific columns if needed: 'id, make, model, year, vin, license_plate'
+    )
+    .order('make', { ascending: true })
+    .order('model', { ascending: true });
+
+  if (error) {
+    console.error('[Vehicles] Error fetching vehicles:', error);
+    throw new Error(error.message || 'Failed to fetch vehicles.');
+  }
+  return data || [];
+};
+
 const Vehicles: React.FC = () => {
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   // State for modal/form
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Optional: Add state for clients list if using client dropdown
-  // const [clients, setClients] = useState<Client[]>([]); 
+  const [submissionError, setSubmissionError] = useState<string | null>(null); // Specific state for submission errors
 
   const { role } = useAuth(); // For permission checks
+  const queryClient = useQueryClient(); // Get query client instance
 
-  // Fetch vehicles function 
-  const fetchVehicles = useCallback(async () => {
-    console.log('[Vehicles] fetchVehicles called.');
-    setLoading(true);
-    setError(null);
-    try {
-      const { data, error: fetchError } = await supabase
-        .from('vehicles')
-        .select('*') 
-        .order('make', { ascending: true })
-        .order('model', { ascending: true });
-
-      if (fetchError) throw fetchError;
-
-      setVehicles(data || []);
-    } catch (err: any) {
-      console.error('[Vehicles] Error fetching vehicles:', err);
-      setError(err.message || 'Failed to fetch vehicles.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Fetch data on component mount
-  useEffect(() => {
-    fetchVehicles();
-    // Optional: Fetch clients if needed for dropdown
-    // fetchClientsForDropdown(); 
-  }, [fetchVehicles]);
+  // Use react-query to fetch vehicles
+  const { 
+    data: vehicles = [], // Default to empty array
+    isLoading,
+    isError,
+    error: queryError, // Rename to avoid conflict with submissionError
+  } = useQuery<Vehicle[], Error>({
+    queryKey: ['vehicles'], // Unique key for this query
+    queryFn: fetchVehiclesFromSupabase, // The async function to fetch data
+    // Options can be added here, e.g., staleTime, cacheTime
+  });
 
   const canManageVehicles = role === 'admin' || role === 'service_advisor';
 
   // --- CRUD Handlers ---
   const handleAddVehicle = () => {
     setEditingVehicle(null);
+    setSubmissionError(null); // Clear submission error when opening modal
     setIsModalOpen(true);
   };
 
   const handleEditVehicle = (vehicle: Vehicle) => {
     setEditingVehicle(vehicle);
+    setSubmissionError(null); // Clear submission error when opening modal
     setIsModalOpen(true);
   };
 
   const handleDeleteVehicle = async (vehicleId: string) => {
     if (!window.confirm('Are you sure you want to delete this vehicle?')) return;
-    // Consider adding specific loading state for delete button
+    // Consider adding specific loading state for delete button if needed
+    // For now, the main loading state isn't suitable here
+    setSubmissionError(null); // Clear previous errors
     try {
       const { error: deleteError } = await supabase
         .from('vehicles')
@@ -91,16 +91,19 @@ const Vehicles: React.FC = () => {
 
       if (deleteError) throw deleteError;
       
-      await fetchVehicles(); // Refetch after delete
+      // Invalidate the vehicles query to trigger a refetch
+      await queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      console.log('[Vehicles] Invalidated vehicles query after delete.');
+
     } catch (err: any) {
       console.error('Error deleting vehicle:', err);
-      setError(err.message || 'Failed to delete vehicle.');
+      setSubmissionError(err.message || 'Failed to delete vehicle.');
     }
   };
 
   const handleFormSubmit = async (vehicleData: Omit<Vehicle, 'id' | 'created_at' | 'updated_at'> | Vehicle) => {
     setIsSubmitting(true);
-    setError(null); // Clear previous errors
+    setSubmissionError(null); // Clear previous errors
     try {
       let error: any;
       if (editingVehicle) {
@@ -122,11 +125,13 @@ const Vehicles: React.FC = () => {
       if (error) throw error;
       
       setIsModalOpen(false); // Close modal on success
-      await fetchVehicles(); // Refetch list
+      // Invalidate the vehicles query to trigger a refetch
+      await queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      console.log('[Vehicles] Invalidated vehicles query after submit.');
+      
     } catch (err: any) {
       console.error('Error saving vehicle:', err);
-      // Display error within the form ideally, but set general error for now
-      setError(err.message || 'Failed to save vehicle.');
+      setSubmissionError(err.message || 'Failed to save vehicle.');
     } finally {
       setIsSubmitting(false);
     }
@@ -135,7 +140,7 @@ const Vehicles: React.FC = () => {
   const handleCancelForm = () => {
     setIsModalOpen(false);
     setEditingVehicle(null);
-    setError(null); // Clear potential submission errors
+    setSubmissionError(null); // Clear potential submission errors
   };
 
   return (
@@ -147,21 +152,26 @@ const Vehicles: React.FC = () => {
           <button
             onClick={handleAddVehicle}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            disabled={isLoading} // Optionally disable while initial load
           >
             Add New Vehicle
           </button>
         )}
       </div>
 
-      {/* Loading/Error Messages */}
-      {loading && !isModalOpen && <p>Loading vehicles...</p>}
-      {error && !isModalOpen && <p className="text-red-600">Error: {error}</p>}
-      {!loading && vehicles.length === 0 && !error && (
+      {/* Loading/Error Messages from useQuery */}
+      {/* Show loading only if not in modal, avoid flicker during refetch */}
+      {isLoading && !isModalOpen && <p>Loading vehicles...</p>}
+      {isError && !isModalOpen && <p className="text-red-600">Error loading vehicles: {queryError?.message}</p>}
+      {/* Display submission errors separately */}
+      {submissionError && <p className="text-red-600 mb-4">Operation Error: {submissionError}</p>}
+      
+      {!isLoading && vehicles.length === 0 && !isError && (
         <p className="text-center text-gray-500 py-4">No vehicles found.</p>
       )}
 
-      {/* Vehicle Table */} 
-      {(!loading || vehicles.length > 0) && !error && (
+      {/* Vehicle Table (Render if not loading OR if data exists, prevents empty table flash) */}
+      {(!isLoading || vehicles.length > 0) && !isError && (
         <div className="bg-white shadow overflow-hidden sm:rounded-lg">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -216,7 +226,6 @@ const Vehicles: React.FC = () => {
           onCancel={handleCancelForm}
           initialData={editingVehicle}
           isSubmitting={isSubmitting}
-          // Pass clients list if using dropdown: clients={clients}
         />
       </Modal>
     </div>
