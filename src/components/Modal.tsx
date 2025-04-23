@@ -5,16 +5,17 @@ interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   title?: string; // Optional title for the modal
+  closeOnClickOutside?: boolean; // Whether to close the modal on backdrop click
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children, title, closeOnClickOutside }) => {
   if (!isOpen) return null;
 
   return (
     // Backdrop
     <div 
       className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex justify-center items-center p-4"
-      onClick={onClose} // Close modal on backdrop click
+      onClick={closeOnClickOutside ? onClose : undefined} // Close modal on backdrop click
     >
       {/* Modal Content */}
       <div 
