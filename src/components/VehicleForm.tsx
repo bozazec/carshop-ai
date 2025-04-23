@@ -1,4 +1,4 @@
-import React, { useState, useEffect, FormEvent, useRef, ChangeEvent, useCallback } from 'react';
+import React, { useState, useEffect, FormEvent, useRef, ChangeEvent } from 'react';
 import { Vehicle } from '../pages/Vehicles'; // Import Vehicle type
 // import { Client } from '../pages/Clients'; // Import Client if needed for dropdown
 import { supabase } from '../services/supabaseClient'; // Import supabase client
