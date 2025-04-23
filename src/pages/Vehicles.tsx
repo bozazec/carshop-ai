@@ -172,7 +172,7 @@ const Vehicles: React.FC = () => {
 
       {/* Vehicle Table (Render if not loading OR if data exists, prevents empty table flash) */}
       {(!isLoading || vehicles.length > 0) && !isError && (
-        <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div className="bg-white shadow overflow-auto sm:rounded-lg pb-8">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
